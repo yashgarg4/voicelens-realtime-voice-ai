@@ -1,0 +1,146 @@
+{
+  "role": "AI Engineer",
+  "scoring_axes": ["content", "depth", "structure"],
+  "questions": [
+    {
+      "id": 1,
+      "category": "LLM Fundamentals",
+      "difficulty": "easy",
+      "question": "In plain terms, what is a large language model and how does it generate text one token at a time?",
+      "focus": ["next-token prediction", "tokens vs words", "autoregressive decoding", "probability distribution over vocabulary"]
+    },
+    {
+      "id": 2,
+      "category": "LLM Fundamentals",
+      "difficulty": "medium",
+      "question": "Explain the difference between a model's context window and its parameters. Why does a longer context window cost more at inference time?",
+      "focus": ["parameters = learned weights", "context = input tokens held in attention", "attention is quadratic in sequence length", "KV cache memory"]
+    },
+    {
+      "id": 3,
+      "category": "LLM Fundamentals",
+      "difficulty": "medium",
+      "question": "What is the role of temperature and top-p sampling when generating from an LLM? When would you turn temperature down to zero?",
+      "focus": ["temperature scales logits", "top-p nucleus sampling", "determinism vs creativity", "zero temp for extraction/classification"]
+    },
+    {
+      "id": 4,
+      "category": "LLM Fundamentals",
+      "difficulty": "hard",
+      "question": "Walk me through what actually happens inside a single transformer attention layer when it processes a sequence.",
+      "focus": ["query/key/value projections", "scaled dot-product attention", "softmax weighting", "multi-head", "residual + layer norm"]
+    },
+    {
+      "id": 5,
+      "category": "LLM Fundamentals",
+      "difficulty": "medium",
+      "question": "Compare fine-tuning, retrieval-augmented generation, and prompt engineering. Given a customer-support bot that must answer from a changing knowledge base, which would you reach for and why?",
+      "focus": ["fine-tune changes behaviour/skill", "RAG supplies fresh facts", "prompting is cheapest", "changing KB favours RAG"]
+    },
+    {
+      "id": 6,
+      "category": "Agentic AI",
+      "difficulty": "easy",
+      "question": "What distinguishes an AI agent from a single LLM call? Describe the core loop an agent runs.",
+      "focus": ["perceive-think-act loop", "tool use", "memory/state", "multi-step autonomy"]
+    },
+    {
+      "id": 7,
+      "category": "Agentic AI",
+      "difficulty": "medium",
+      "question": "How does tool or function calling work under the hood, and how do you stop an agent from looping forever or calling tools it shouldn't?",
+      "focus": ["model emits structured tool call", "runtime executes + returns result", "step/iteration limits", "allow-lists and guardrails"]
+    },
+    {
+      "id": 8,
+      "category": "Agentic AI",
+      "difficulty": "medium",
+      "question": "What is ReAct prompting and why does interleaving reasoning with actions help an agent?",
+      "focus": ["reason + act interleaving", "thought-action-observation", "grounds reasoning in tool results", "reduces hallucinated steps"]
+    },
+    {
+      "id": 9,
+      "category": "Agentic AI",
+      "difficulty": "hard",
+      "question": "Design a multi-agent system to research a topic and produce a report. How would you split responsibilities and have the agents coordinate?",
+      "focus": ["planner/worker/critic roles", "shared memory or message passing", "orchestration", "verification step", "failure handling"]
+    },
+    {
+      "id": 10,
+      "category": "Agentic AI",
+      "difficulty": "medium",
+      "question": "How would you evaluate whether an agent is actually performing well in production, beyond it 'looking right'?",
+      "focus": ["task success rate", "step efficiency / cost", "trajectory inspection", "offline eval sets", "human review + regression tests"]
+    },
+    {
+      "id": 11,
+      "category": "Systems Design",
+      "difficulty": "medium",
+      "question": "Design the backend for a real-time voice assistant: browser microphone in, spoken AI reply out. What are the main components and where does latency come from?",
+      "focus": ["WebSocket streaming", "STT / live model", "VAD + turn-taking", "TTS / audio out", "latency: network, model, buffering"]
+    },
+    {
+      "id": 12,
+      "category": "Systems Design",
+      "difficulty": "hard",
+      "question": "How would you serve a large model to thousands of concurrent users cost-effectively? Talk about batching, caching, and scaling.",
+      "focus": ["continuous/dynamic batching", "KV cache + prompt caching", "GPU autoscaling", "quantization", "queueing + load balancing"]
+    },
+    {
+      "id": 13,
+      "category": "Systems Design",
+      "difficulty": "medium",
+      "question": "Design a RAG pipeline end to end, from raw documents to a grounded answer. Where do quality problems usually creep in?",
+      "focus": ["chunking + embeddings", "vector store + retrieval", "reranking", "context assembly", "failure: bad chunking/retrieval, stale index"]
+    },
+    {
+      "id": 14,
+      "category": "Systems Design",
+      "difficulty": "medium",
+      "question": "How do you handle hallucinations and unsafe outputs in a user-facing LLM product?",
+      "focus": ["grounding / RAG with citations", "output validation + schemas", "guardrails / moderation", "confidence + fallbacks", "human-in-the-loop"]
+    },
+    {
+      "id": 15,
+      "category": "Systems Design",
+      "difficulty": "hard",
+      "question": "Explain QLoRA. Why does it let you fine-tune a model on a single consumer GPU when full fine-tuning would not fit?",
+      "focus": ["LoRA low-rank adapters", "4-bit quantized frozen base", "few trainable params", "memory savings", "adapter-only checkpoints"]
+    },
+    {
+      "id": 16,
+      "category": "Behavioural",
+      "difficulty": "easy",
+      "question": "Tell me about an AI or ML project you're proud of. What was your specific contribution and what was the impact?",
+      "focus": ["clear problem framing", "your role vs team", "measurable impact", "concise STAR structure"]
+    },
+    {
+      "id": 17,
+      "category": "Behavioural",
+      "difficulty": "medium",
+      "question": "Describe a time a model or system you built failed in production or gave bad results. How did you find out and what did you do?",
+      "focus": ["ownership", "detection / monitoring", "root-cause analysis", "fix + prevention", "what you learned"]
+    },
+    {
+      "id": 18,
+      "category": "Behavioural",
+      "difficulty": "medium",
+      "question": "The field moves fast. How do you decide what new AI techniques are worth adopting versus hype you should ignore?",
+      "focus": ["evidence over hype", "prototype + measure", "cost/benefit", "fit to the problem", "concrete examples"]
+    },
+    {
+      "id": 19,
+      "category": "Behavioural",
+      "difficulty": "medium",
+      "question": "How do you explain a complex model decision or a technical trade-off to a non-technical stakeholder?",
+      "focus": ["audience awareness", "analogies", "focus on impact not internals", "managing expectations"]
+    },
+    {
+      "id": 20,
+      "category": "Behavioural",
+      "difficulty": "hard",
+      "question": "You disagree with a teammate on whether to use a third-party API or build a model in-house. How do you approach the disagreement and reach a decision?",
+      "focus": ["frame trade-offs (cost, control, time)", "data-driven argument", "listening / collaboration", "reversible decisions", "committing after decision"]
+    }
+  ]
+}

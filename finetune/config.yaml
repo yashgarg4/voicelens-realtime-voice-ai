@@ -1,0 +1,54 @@
+# VoiceLens — Whisper QLoRA fine-tuning configuration.
+# Tuned for a single free Google Colab T4 (16 GB). Edit and re-run.
+
+model:
+  # Whisper-small: best accuracy/cost trade-off for accent fine-tuning.
+  name: openai/whisper-small
+  language: english
+  task: transcribe
+
+dataset:
+  # ai4bharat/Svarah — a benchmark of Indian-accented English (117 speakers from
+  # India, transcribed). Chosen because Mozilla pulled Common Voice off the
+  # HuggingFace Hub in Oct 2025 (the mozilla-foundation/common_voice_* repos are
+  # now empty). Svarah is purpose-built Indian English (so no accent filtering
+  # needed) and ships as parquet (so it loads on any `datasets` version — no
+  # fragile loading script). It is "auto"-gated: accept the terms on the dataset
+  # page and provide HF_TOKEN. It has a single "test" split which we re-split
+  # into train/eval ourselves.
+  name: ai4bharat/Svarah
+  split: test
+  audio_column: audio_filepath
+  text_column: text
+  max_samples: 500 # training clips after filtering
+  eval_samples: 50 # held-out clips for the WER comparison
+  min_duration_s: 2.0
+  max_duration_s: 20.0
+  processed_dir: finetune/data # save_to_disk target (gitignored)
+
+qlora:
+  # 4-bit NF4 quantization of the frozen base (this is the "Q" in QLoRA).
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_compute_dtype: float16
+  bnb_4bit_use_double_quant: true
+  # LoRA adapters (the only trainable weights).
+  lora_r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  target_modules: [q_proj, v_proj] # attention query/value projections
+
+training:
+  output_dir: finetune/output # adapter weights saved here (gitignored)
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 1
+  learning_rate: 1.0e-3
+  warmup_steps: 50
+  num_train_epochs: 3
+  fp16: true
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 50
+  generation_max_length: 128
+  seed: 42

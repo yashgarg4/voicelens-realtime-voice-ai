@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# VoiceLens — Python dependencies
+#
+# Two groups:
+#   [B1] Voice pipeline  — needed to run the real-time voice app (Phases 1-2,4)
+#   [B2] Fine-tuning     — needed only to fine-tune Whisper (Phase 3). These are
+#                          heavy and GPU-oriented; install them in your training
+#                          environment (a GPU box or Google Colab), not on a
+#                          laptop. They are intentionally listed but commented so
+#                          a clean `pip install -r requirements.txt` gives you a
+#                          working voice app immediately.
+# ---------------------------------------------------------------------------
+
+# ---- [B1] Voice pipeline (pinned to what Phase 1 was built and tested on) ----
+google-genai==2.7.0
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+websockets==16.0
+python-dotenv==1.2.2
+pydantic==2.13.4
+numpy==2.4.6
+
+# ---- [B2] Fine-tuning (Phase 3) — uncomment in your GPU/Colab environment ----
+# torch                     # keep the platform's preinstalled torch (matches its CUDA)
+# transformers==4.46.3
+# peft==0.13.2
+# bitsandbytes>=0.45.0       # must ship the current CUDA binary (e.g. cuda128) and not
+#                            #   import the removed `triton.ops`; old pins break on Colab
+# accelerate>=1.1.1
+# datasets==2.20.0          # any recent 2.x/3.x works (Svarah is parquet, no
+# huggingface_hub==0.24.7   #   loading script). Pinned for a known-good Colab combo.
+# evaluate==0.4.3
+# jiwer==3.0.5
+# librosa==0.10.2.post1
+# soundfile==0.12.1
