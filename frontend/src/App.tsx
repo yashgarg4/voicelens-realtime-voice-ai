@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useSession } from "./hooks/useSession";
 import { useVoiceStream } from "./hooks/useVoiceStream";
 import { QuestionDisplay } from "./components/QuestionDisplay";
+import { JobTailor } from "./components/JobTailor";
 import { VoicePanel } from "./components/VoicePanel";
 import { FeedbackCard } from "./components/FeedbackCard";
 import { ScoreHistory } from "./components/ScoreHistory";
@@ -52,6 +53,14 @@ export default function App() {
         )}
 
         <main className="flex flex-1 flex-col gap-8">
+          {!active && (
+            <JobTailor
+              generating={session.generating}
+              error={session.generateError}
+              onGenerate={session.generateQuestions}
+            />
+          )}
+
           <QuestionDisplay
             questions={session.questions}
             selectedId={session.selectedId}

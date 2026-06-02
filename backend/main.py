@@ -85,6 +85,12 @@ class EndSessionRequest(BaseModel):
     session_id: str
 
 
+class GenerateQuestionsRequest(BaseModel):
+    job_description: str = ""
+    resume: str = ""
+    count: int = 5
+
+
 # --- REST endpoints ---------------------------------------------------------
 @app.get("/api/health")
 async def health() -> dict:
@@ -102,6 +108,21 @@ async def health() -> dict:
 @app.get("/api/questions")
 async def list_questions() -> dict:
     return {"questions": [q.model_dump() for q in coach.QUESTIONS]}
+
+
+@app.post("/api/questions/generate")
+async def generate_questions(req: GenerateQuestionsRequest) -> dict:
+    """Generate JD/resume-tailored questions (LLM, structured output)."""
+    if not req.job_description.strip():
+        raise HTTPException(status_code=400, detail="job_description is required")
+    questions = await coach.generate_questions(
+        req.job_description, req.resume, req.count
+    )
+    if not questions:
+        raise HTTPException(
+            status_code=502, detail="Question generation failed — try again."
+        )
+    return {"questions": [q.model_dump() for q in questions]}
 
 
 @app.post("/api/session/start")

@@ -70,13 +70,19 @@ def _load_questions() -> list[Question]:
 QUESTIONS: list[Question] = _load_questions()
 _QUESTIONS_BY_ID: dict[int, Question] = {q.id: q for q in QUESTIONS}
 
+# Runtime registry of LLM-generated, JD-tailored questions. Ids start at 1001 so
+# they never collide with the static bank (1-20). In-memory: a backend restart
+# clears them, which is fine for a session-based feature.
+_GENERATED: dict[int, Question] = {}
+_next_generated_id = 1001
+
 
 def get_question(
     question_id: Optional[int] = None, category: Optional[str] = None
 ) -> Question:
     """Return a specific question by id, a random one in a category, or any."""
     if question_id is not None:
-        q = _QUESTIONS_BY_ID.get(question_id)
+        q = _QUESTIONS_BY_ID.get(question_id) or _GENERATED.get(question_id)
         if q is None:
             raise KeyError(f"No question with id {question_id}")
         return q
@@ -237,6 +243,96 @@ async def grade_answer(question: Question, answer: str) -> Optional[FeedbackScor
             if attempt == 0:
                 await asyncio.sleep(1.5)
     return None
+
+
+class _GenQuestion(BaseModel):
+    """One generated question (structured output schema)."""
+
+    category: str
+    difficulty: str
+    question: str
+    focus: list[str]
+
+
+def build_generation_prompt(job_description: str, resume: str, count: int) -> str:
+    resume_block = (
+        f'\n\nCANDIDATE RESUME:\n"""{resume.strip()}"""' if resume.strip() else ""
+    )
+    resume_hint = (
+        " If a resume is given, tailor some questions to the candidate's "
+        "specific claimed skills and projects."
+        if resume.strip()
+        else ""
+    )
+    return f"""You are an expert technical interviewer. Based on the job \
+description below{' and the candidate resume' if resume.strip() else ''}, write \
+{count} mock-interview questions tailored to THIS role.{resume_hint}
+
+Rules:
+- Mix difficulties (easy/medium/hard) and the topics that matter most for the JD.
+- Each question must be one clear, spoken-friendly sentence.
+- For each, give a short `category` topic label (e.g. "LLM Systems", "MLOps",
+  "Behavioural") and 3-5 `focus` bullet points a strong answer should hit.
+
+JOB DESCRIPTION:
+\"\"\"{job_description.strip()}\"\"\"{resume_block}"""
+
+
+def _register_generated(items: list[_GenQuestion]) -> list[Question]:
+    global _next_generated_id
+    out: list[Question] = []
+    for it in items:
+        diff = it.difficulty.strip().lower()
+        if diff not in ("easy", "medium", "hard"):
+            diff = "medium"
+        focus = [f.strip() for f in it.focus if f.strip()][:6]
+        q = Question(
+            id=_next_generated_id,
+            category=(it.category.strip() or "Tailored"),
+            difficulty=diff,
+            question=it.question.strip(),
+            focus=focus,
+        )
+        _GENERATED[q.id] = q
+        _next_generated_id += 1
+        out.append(q)
+    return out
+
+
+async def generate_questions(
+    job_description: str, resume: str = "", count: int = 5
+) -> list[Question]:
+    """Generate JD/resume-tailored questions via a structured-output LLM call.
+
+    Registers them in the runtime store so the WS can look them up by id.
+    Returns [] on failure (the static bank remains available).
+    """
+    if not job_description.strip():
+        return []
+    count = max(1, min(10, count))
+    prompt = build_generation_prompt(job_description, resume, count)
+    client = _get_grader_client()
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=list[_GenQuestion],
+        temperature=0.7,
+    )
+    for attempt in range(2):
+        try:
+            resp = await client.aio.models.generate_content(
+                model=settings.GRADER_MODEL, contents=prompt, config=config
+            )
+            items = resp.parsed
+            if not items:
+                return []
+            return _register_generated(items)
+        except Exception as exc:
+            logger.warning(
+                "generate_questions attempt %d failed: %s", attempt + 1, exc
+            )
+            if attempt == 0:
+                await asyncio.sleep(1.5)
+    return []
 
 
 # Sent as the opening user turn to kick the interview off.

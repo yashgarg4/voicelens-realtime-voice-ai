@@ -15,7 +15,7 @@ VoiceLens is an AI engineer interview coach you talk to. You pick a question, an
 |---|---|
 | **Full-duplex audio** — speak and hear replies over a single WebSocket | **QLoRA fine-tuning** — Whisper-small adapted with 4-bit LoRA adapters |
 | **Barge-in** — interrupt the coach mid-sentence; playback flushes instantly | **Indian English** — trained on the Svarah benchmark (117 Indian speakers) |
-| **Interview brain** — 20 AI-engineer questions across 4 categories | **Measurable WER gain** — 16.98% → 13.97% on held-out clips (−17.8%) |
+| **Interview brain** — 20 AI-engineer questions + **JD/résumé-tailored** question generation | **Measurable WER gain** — 16.98% → 13.97% on held-out clips (−17.8%) |
 | **Spoken + rubric-graded feedback** — a structured LLM grades the answer on Content / Depth / Structure | **Tiny adapter** — ~3 MB shipped instead of a multi-GB model |
 | **Reconnection** — exponential backoff (3 retries) on dropped sockets | **Base fallback** — runs on the base model if no adapter is present |
 | **Dashboard** — session history + a pure-SVG score radar chart | **Reproducible** — one Colab notebook runs prepare → train → evaluate |
@@ -165,6 +165,7 @@ voicelens/
 | `/api/wer` | GET | Base vs fine-tuned Whisper WER comparison |
 | `/api/health` | GET | Liveness + config (key present, model, sample rates) |
 | `/api/questions` | GET | The 20-question AI-engineer bank |
+| `/api/questions/generate` | POST | Generate JD/résumé-tailored questions (LLM) |
 
 ## Environment variables
 

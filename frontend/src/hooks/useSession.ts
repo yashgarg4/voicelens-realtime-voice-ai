@@ -15,12 +15,16 @@ export interface SessionState {
   loadError: string | null;
   history: SessionRecord[];
   wer: WerResult | null;
+  generating: boolean;
+  generateError: string | null;
   /** POST /api/session/start for the selected question; returns ids for the WS. */
   begin: () => Promise<{ questionId: number; sessionId: string }>;
   /** POST /api/session/end for the active session. */
   finish: () => Promise<void>;
   /** Re-fetch the past-sessions list (call after a session ends). */
   refreshHistory: () => Promise<void>;
+  /** Generate JD/resume-tailored questions and prepend them to the picker. */
+  generateQuestions: (jobDescription: string, resume: string) => Promise<void>;
 }
 
 export function useSession(): SessionState {
@@ -30,6 +34,8 @@ export function useSession(): SessionState {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [history, setHistory] = useState<SessionRecord[]>([]);
   const [wer, setWer] = useState<WerResult | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   // Load the question bank once.
   useEffect(() => {
@@ -101,6 +107,34 @@ export function useSession(): SessionState {
     }
   }, [sessionId]);
 
+  const generateQuestions = useCallback(
+    async (jobDescription: string, resume: string) => {
+      setGenerating(true);
+      setGenerateError(null);
+      try {
+        const res = await fetch("/api/questions/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_description: jobDescription,
+            resume,
+            count: 5,
+          }),
+        });
+        if (!res.ok) throw new Error(`Generation failed (${res.status})`);
+        const data: { questions: Question[] } = await res.json();
+        // Prepend the tailored questions and select the first one.
+        setQuestions((prev) => [...data.questions, ...prev]);
+        if (data.questions.length > 0) setSelectedId(data.questions[0].id);
+      } catch (err) {
+        setGenerateError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setGenerating(false);
+      }
+    },
+    []
+  );
+
   return {
     questions,
     selectedId,
@@ -110,8 +144,11 @@ export function useSession(): SessionState {
     loadError,
     history,
     wer,
+    generating,
+    generateError,
     begin,
     finish,
     refreshHistory,
+    generateQuestions,
   };
 }
