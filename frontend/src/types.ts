@@ -16,6 +16,8 @@ export interface FeedbackScores {
   structure: number; // 0-10
   overall: number;
   summary: string;
+  strengths?: string;
+  improvements?: string;
 }
 
 // A persisted session row from GET /api/sessions.
@@ -56,6 +58,13 @@ export interface FeedbackMessage {
   scores: FeedbackScores;
 }
 
+// The candidate's answer re-transcribed by the fine-tuned Whisper (B2 layer).
+export interface FinetunedTranscriptMessage {
+  type: "finetuned_transcript";
+  text: string;
+  using_adapter: boolean;
+}
+
 export interface ErrorMessage {
   type: "error";
   message: string;
@@ -87,7 +96,8 @@ export type ServerMessage =
   | TextMessage
   | TranscriptMessage
   | SignalMessage
-  | FeedbackMessage;
+  | FeedbackMessage
+  | FinetunedTranscriptMessage;
 
 export type ConnectionStatus =
   | "idle"

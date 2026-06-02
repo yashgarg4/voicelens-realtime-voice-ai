@@ -35,7 +35,8 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import coach, db
+from . import coach, db, transcriber
+from .audio import simple_vad
 from .config import settings
 from .gemini_live import GeminiLiveSession
 
@@ -46,6 +47,11 @@ logger = logging.getLogger("voicelens.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    # Pre-warm the fine-tuned Whisper in the background so the first answer isn't
+    # delayed by the ~25s model load. Non-blocking: the server starts immediately.
+    if settings.ENABLE_FINETUNED_STT and transcriber.is_available():
+        logger.info("Pre-warming fine-tuned Whisper (background)…")
+        asyncio.create_task(asyncio.to_thread(transcriber.get_transcriber().load))
     yield
 
 
@@ -89,6 +95,7 @@ async def health() -> dict:
         "sample_rate_in": settings.SAMPLE_RATE_IN,
         "sample_rate_out": settings.SAMPLE_RATE_OUT,
         "questions": len(coach.QUESTIONS),
+        "finetuned_stt": settings.ENABLE_FINETUNED_STT and transcriber.is_available(),
     }
 
 
@@ -169,6 +176,29 @@ async def ws_session(websocket: WebSocket) -> None:
     # Kick off the interview: the coach greets and asks the question.
     await gemini.send_text(coach.START_INTERVIEW_TRIGGER)
 
+    # B2: capture the candidate's answer audio and re-transcribe it with the
+    # fine-tuned Whisper so the UI can show it next to Gemini's transcript.
+    stt_on = settings.ENABLE_FINETUNED_STT and transcriber.is_available()
+    answer_audio = bytearray()  # raw 16 kHz PCM16 of the current user turn
+    # ~0.6 s minimum so we don't transcribe stray clicks/silence.
+    MIN_ANSWER_BYTES = int(0.6 * settings.SAMPLE_RATE_IN) * settings.SAMPLE_WIDTH_BYTES
+
+    async def transcribe_answer(pcm: bytes) -> None:
+        try:
+            text = await asyncio.to_thread(
+                transcriber.get_transcriber().transcribe_pcm, pcm
+            )
+            if text:
+                await websocket.send_json(
+                    {
+                        "type": "finetuned_transcript",
+                        "text": text,
+                        "using_adapter": transcriber.get_transcriber().using_adapter,
+                    }
+                )
+        except Exception:
+            logger.exception("fine-tuned transcription failed")
+
     async def uplink() -> None:
         try:
             while True:
@@ -178,22 +208,46 @@ async def ws_session(websocket: WebSocket) -> None:
                 data = message.get("bytes")
                 if data is not None:
                     await gemini.send_audio(data)
+                    if stt_on:
+                        answer_audio.extend(data)
         except WebSocketDisconnect:
             logger.info("Browser disconnected (uplink)")
         except Exception:
             logger.exception("uplink task error")
 
     async def downlink() -> None:
-        # Accumulate the coach's spoken transcript per turn so we can parse
-        # structured scores once a turn completes.
+        # Per-turn transcripts: the candidate's answer (input) is graded by the
+        # structured LLM grader; the coach's spoken text (output) is the regex
+        # fallback if grading fails.
+        answer_text = ""
         coach_text = ""
+        coach_speaking = False  # has the coach started replying this turn?
         try:
             async for msg in gemini.receive():
                 await websocket.send_json(msg)
-                if msg["type"] == "output_transcript":
+                mtype = msg["type"]
+
+                # Coach started replying => the user's answer just ended. Snapshot
+                # the buffered answer audio and transcribe it with the fine-tune.
+                if stt_on and not coach_speaking and mtype in ("audio", "output_transcript"):
+                    coach_speaking = True
+                    snapshot = bytes(answer_audio)
+                    answer_audio.clear()
+                    if len(snapshot) >= MIN_ANSWER_BYTES and simple_vad(snapshot, 300):
+                        asyncio.create_task(transcribe_answer(snapshot))
+
+                if mtype == "input_transcript":
+                    answer_text += msg["text"]
+                elif mtype == "output_transcript":
                     coach_text += msg["text"]
-                elif msg["type"] == "turn_complete":
-                    scores = coach.parse_feedback(coach_text)
+                elif mtype == "turn_complete":
+                    # Grade the candidate's answer (skip the greeting turn, which
+                    # has no answer). Fall back to parsing the coach's speech.
+                    scores = None
+                    if answer_text.strip():
+                        scores = await coach.grade_answer(question, answer_text)
+                    if scores is None:
+                        scores = coach.parse_feedback(coach_text)
                     if scores is not None:
                         await websocket.send_json(
                             {"type": "feedback", "scores": scores.model_dump()}
@@ -202,7 +256,10 @@ async def ws_session(websocket: WebSocket) -> None:
                             await asyncio.to_thread(
                                 db.update_scores, session_id, scores.model_dump()
                             )
+                    answer_text = ""
                     coach_text = ""
+                    coach_speaking = False
+                    answer_audio.clear()  # drop any audio captured during the reply
         except WebSocketDisconnect:
             logger.info("Browser disconnected (downlink)")
         except Exception:

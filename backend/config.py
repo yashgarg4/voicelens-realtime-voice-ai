@@ -31,6 +31,9 @@ class Settings:
         "GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview"
     )
 
+    # Standard (text) model used to grade answers with structured output.
+    GRADER_MODEL: str = os.getenv("GRADER_MODEL", "gemini-3.5-flash")
+
     # --- Audio format contract (do not change without reading the docs) ----
     # Gemini Live INPUT  : raw PCM, 16-bit signed LE, mono, 16 kHz.
     # Gemini Live OUTPUT : raw PCM, 16-bit signed LE, mono, 24 kHz.
@@ -41,6 +44,12 @@ class Settings:
 
     # Audio chunk size in *samples* used for client-side capture buffering.
     CHUNK_SIZE: int = 1024
+
+    # B2: also transcribe the candidate's answer with the fine-tuned Whisper
+    # (requires torch/transformers installed; no-ops gracefully if not).
+    ENABLE_FINETUNED_STT: bool = os.getenv(
+        "ENABLE_FINETUNED_STT", "true"
+    ).strip().lower() in ("1", "true", "yes")
 
     # --- Server / CORS -----------------------------------------------------
     BACKEND_HOST: str = os.getenv("BACKEND_HOST", "0.0.0.0")

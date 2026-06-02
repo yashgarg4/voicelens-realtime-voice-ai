@@ -64,6 +64,8 @@ export default function App() {
             status={voice.status}
             error={voice.error}
             latestUser={voice.latestUser}
+            finetunedTranscript={voice.finetunedTranscript}
+            usingAdapter={voice.usingAdapter}
             latestCoach={voice.latestCoach}
             history={voice.history}
             micLevel={voice.micLevel}

@@ -59,6 +59,19 @@ export function FeedbackCard({ feedback }: { feedback: FeedbackScores | null }) 
           {feedback.summary}
         </p>
       )}
+
+      {feedback.strengths && (
+        <p className="mt-3 text-sm leading-relaxed text-slate-300">
+          <span className="font-semibold text-emerald-300">Strengths: </span>
+          {feedback.strengths}
+        </p>
+      )}
+      {feedback.improvements && (
+        <p className="mt-2 text-sm leading-relaxed text-slate-300">
+          <span className="font-semibold text-amber-300">To improve: </span>
+          {feedback.improvements}
+        </p>
+      )}
     </div>
   );
 }

@@ -25,6 +25,8 @@ interface Props {
   status: ConnectionStatus;
   error: string | null;
   latestUser: string;
+  finetunedTranscript: string;
+  usingAdapter: boolean;
   latestCoach: string;
   history: Exchange[];
   micLevel: number;
@@ -37,6 +39,8 @@ export function VoicePanel({
   status,
   error,
   latestUser,
+  finetunedTranscript,
+  usingAdapter,
   latestCoach,
   history,
   micLevel,
@@ -100,7 +104,27 @@ export function VoicePanel({
       )}
 
       <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-        <TranscriptCard label="You said" text={latestUser} accent="text-sky-300" />
+        <div className="min-h-24 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-300">
+            You said
+          </p>
+          <p className="text-sm leading-relaxed text-slate-200">
+            {latestUser || <span className="text-slate-600">…</span>}
+          </p>
+          {finetunedTranscript && (
+            <div className="mt-3 border-t border-slate-800 pt-2">
+              <p className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                Fine-tuned Whisper
+                <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px]">
+                  {usingAdapter ? "QLoRA" : "base"}
+                </span>
+              </p>
+              <p className="text-xs leading-relaxed text-slate-400">
+                {finetunedTranscript}
+              </p>
+            </div>
+          )}
+        </div>
         <TranscriptCard
           label="Coach said"
           text={latestCoach}

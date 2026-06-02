@@ -51,7 +51,9 @@ function base64ToFloat32(b64: string): Float32Array {
 export interface VoiceStreamState {
   status: ConnectionStatus;
   error: string | null;
-  latestUser: string; // your most recent utterance
+  latestUser: string; // your most recent utterance (Gemini transcript)
+  finetunedTranscript: string; // same answer re-transcribed by the QLoRA Whisper
+  usingAdapter: boolean; // whether that transcript used the fine-tuned adapter
   latestCoach: string; // the coach's most recent / in-progress reply
   history: Exchange[]; // every completed round
   feedback: FeedbackScores | null; // latest parsed scores
@@ -64,6 +66,8 @@ export function useVoiceStream(): VoiceStreamState {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [latestUser, setLatestUser] = useState("");
+  const [finetunedTranscript, setFinetunedTranscript] = useState("");
+  const [usingAdapter, setUsingAdapter] = useState(false);
   const [latestCoach, setLatestCoach] = useState("");
   const [history, setHistory] = useState<Exchange[]>([]);
   const [feedback, setFeedback] = useState<FeedbackScores | null>(null);
@@ -165,6 +169,7 @@ export function useVoiceStream(): VoiceStreamState {
       coachBufRef.current = "";
       setLatestUser("");
       setLatestCoach("");
+      setFinetunedTranscript("");
       roundCompleteRef.current = false;
     }
   }, []);
@@ -184,6 +189,10 @@ export function useVoiceStream(): VoiceStreamState {
           break;
         case "feedback":
           setFeedback(msg.scores);
+          break;
+        case "finetuned_transcript":
+          setFinetunedTranscript(msg.text);
+          setUsingAdapter(msg.using_adapter);
           break;
         case "audio":
           setStatus("speaking");
@@ -286,6 +295,7 @@ export function useVoiceStream(): VoiceStreamState {
       setStatus("connecting");
       setLatestUser("");
       setLatestCoach("");
+      setFinetunedTranscript("");
       setHistory([]);
       setFeedback(null);
       userBufRef.current = "";
@@ -377,6 +387,8 @@ export function useVoiceStream(): VoiceStreamState {
     status,
     error,
     latestUser,
+    finetunedTranscript,
+    usingAdapter,
     latestCoach,
     history,
     feedback,

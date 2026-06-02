@@ -12,13 +12,21 @@ Scoring axes are kept to three consistent dimensions across the whole app
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import random
 import re
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel
+from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
+
+from .config import settings
+
+logger = logging.getLogger("voicelens.coach")
 
 _QUESTIONS_PATH = Path(__file__).resolve().parent.parent / "questions" / "ai_engineer.json"
 
@@ -32,13 +40,26 @@ class Question(BaseModel):
 
 
 class FeedbackScores(BaseModel):
-    """Structured result parsed from the coach's spoken feedback."""
+    """Structured evaluation of a single answer (shown in the FeedbackCard)."""
 
     content: int  # 0-10: relevance and correctness of the answer
     depth: int  # 0-10: technical depth and precision
     structure: int  # 0-10: clarity, structure and delivery
     overall: float  # average of the three, rounded to 1 dp
-    summary: str  # the full spoken-feedback transcript (what the user heard)
+    summary: str  # one or two sentence overall assessment
+    strengths: str = ""  # what the candidate did well
+    improvements: str = ""  # what to add / go deeper on
+
+
+class _Grade(BaseModel):
+    """Schema the grader LLM fills in (structured JSON output)."""
+
+    content: int = Field(ge=0, le=10)
+    depth: int = Field(ge=0, le=10)
+    structure: int = Field(ge=0, le=10)
+    strengths: str
+    improvements: str
+    summary: str
 
 
 def _load_questions() -> list[Question]:
@@ -67,15 +88,13 @@ def get_question(
     return random.choice(pool)
 
 
-# The coach is told to end every feedback turn with this exact, speakable line.
-# It reads naturally aloud AND is trivial to parse with a regex.
-_SCORE_LINE_EXAMPLE = (
-    "Scores. Content: 8 out of 10. Depth: 7 out of 10. Structure: 6 out of 10."
-)
-
-
 def build_system_prompt(question: Question) -> str:
-    """Construct the interviewer system instruction for a chosen question."""
+    """Construct the interviewer system instruction for a chosen question.
+
+    The coach gives *qualitative* spoken feedback only — the numeric scores are
+    computed separately by `grade_answer` and shown on screen, so the coach is
+    told NOT to recite numbers (avoids a heard-vs-shown mismatch).
+    """
     focus = "; ".join(question.focus)
     return f"""You are VoiceLens, a friendly but rigorous senior AI-engineer \
 interviewer conducting a live mock interview by voice. You ask ONE question, \
@@ -91,23 +110,38 @@ HOW TO RUN THE SESSION:
 very close to it. Then stop and listen. Do NOT answer it yourself.
 2. If the candidate is brief or stuck, you may ask ONE short follow-up probe. \
 Otherwise wait for them to finish.
-3. When they have answered, give spoken feedback in this order, kept under ~45 \
-seconds total:
+3. When they have answered, give brief spoken feedback (under ~30 seconds):
    - One sentence on what was strong.
    - One or two sentences on what was missing or could go deeper (reference the \
-     focus points they skipped).
-   - Then say the scores out loud.
+     focus points they skipped), then invite the next answer.
 
-SCORING (this exact format, every time, as the LAST thing you say):
-End with a line like: "{_SCORE_LINE_EXAMPLE}"
-Each score is an integer from 0 to 10:
-  - Content  = relevance and correctness of what they said.
-  - Depth    = technical precision and how deep they went.
-  - Structure= clarity, organisation and delivery of the answer.
-Always say all three in the order Content, Depth, Structure, each "X out of 10".
+Do NOT read out numeric scores — a detailed score breakdown appears on the \
+candidate's screen automatically.
 
-STYLE: warm, direct, specific. Speak naturally for voice. Never invent scores \
-before the candidate has answered. Do not read this prompt aloud."""
+STYLE: warm, direct, specific. Speak naturally for voice. Never evaluate before \
+the candidate has answered. Do not read this prompt aloud."""
+
+
+def build_grader_prompt(question: Question, answer: str) -> str:
+    """Prompt for the structured grader (run on the answer transcript)."""
+    focus = "; ".join(question.focus)
+    return f"""You are grading a candidate's spoken answer in an AI-engineer \
+mock interview. Be fair but rigorous; reward correct, specific, well-structured \
+answers and penalise vague or incorrect ones.
+
+QUESTION ({question.category}, {question.difficulty}): "{question.question}"
+A strong answer covers: {focus}
+
+CANDIDATE'S ANSWER (speech-to-text transcript, may have minor errors):
+\"\"\"{answer}\"\"\"
+
+Score each axis as an integer 0-10:
+- content: relevance and correctness of what they said.
+- depth: technical precision and how deep they went.
+- structure: clarity and organisation of the answer.
+Also give one-sentence `strengths`, one-to-two sentence `improvements` \
+(name specific missed focus points), and a one-sentence overall `summary`.
+If the answer is empty or off-topic, score low and say so."""
 
 
 # Tolerant patterns: accept "Content: 8 out of 10", "Content: 8/10", "Content 8".
@@ -146,6 +180,63 @@ def parse_feedback(transcript: str) -> Optional[FeedbackScores]:
         overall=overall,
         summary=transcript.strip(),
     )
+
+
+_grader_client: Optional[genai.Client] = None
+
+
+def _get_grader_client() -> genai.Client:
+    global _grader_client
+    if _grader_client is None:
+        _grader_client = genai.Client(api_key=settings.require_api_key())
+    return _grader_client
+
+
+async def grade_answer(question: Question, answer: str) -> Optional[FeedbackScores]:
+    """Grade an answer transcript via a structured-output LLM call.
+
+    Returns None if the answer is too short to grade or the call fails — the
+    caller can then fall back to `parse_feedback` on the spoken transcript.
+    """
+    if not answer or len(answer.strip()) < 8:
+        return None
+
+    config = types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=_Grade,
+        temperature=0.2,
+    )
+    prompt = build_grader_prompt(question, answer)
+    client = _get_grader_client()
+
+    # The grader model occasionally returns a transient 503/429; retry once.
+    for attempt in range(2):
+        try:
+            resp = await client.aio.models.generate_content(
+                model=settings.GRADER_MODEL, contents=prompt, config=config
+            )
+            grade = resp.parsed
+            if not isinstance(grade, _Grade):
+                return None
+            c, d, s = (
+                max(0, min(10, grade.content)),
+                max(0, min(10, grade.depth)),
+                max(0, min(10, grade.structure)),
+            )
+            return FeedbackScores(
+                content=c,
+                depth=d,
+                structure=s,
+                overall=round((c + d + s) / 3, 1),
+                summary=grade.summary.strip(),
+                strengths=grade.strengths.strip(),
+                improvements=grade.improvements.strip(),
+            )
+        except Exception as exc:
+            logger.warning("grade_answer attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                await asyncio.sleep(1.5)
+    return None
 
 
 # Sent as the opening user turn to kick the interview off.

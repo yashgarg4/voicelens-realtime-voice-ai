@@ -16,7 +16,7 @@ VoiceLens is an AI engineer interview coach you talk to. You pick a question, an
 | **Full-duplex audio** — speak and hear replies over a single WebSocket | **QLoRA fine-tuning** — Whisper-small adapted with 4-bit LoRA adapters |
 | **Barge-in** — interrupt the coach mid-sentence; playback flushes instantly | **Indian English** — trained on the Svarah benchmark (117 Indian speakers) |
 | **Interview brain** — 20 AI-engineer questions across 4 categories | **Measurable WER gain** — 16.98% → 13.97% on held-out clips (−17.8%) |
-| **Spoken + scored feedback** — Content / Depth / Structure, parsed live | **Tiny adapter** — ~3 MB shipped instead of a multi-GB model |
+| **Spoken + rubric-graded feedback** — a structured LLM grades the answer on Content / Depth / Structure | **Tiny adapter** — ~3 MB shipped instead of a multi-GB model |
 | **Reconnection** — exponential backoff (3 retries) on dropped sockets | **Base fallback** — runs on the base model if no adapter is present |
 | **Dashboard** — session history + a pure-SVG score radar chart | **Reproducible** — one Colab notebook runs prepare → train → evaluate |
 
@@ -104,6 +104,16 @@ python finetune/evaluate.py          # WER comparison + writes wer_result.json
 
 Expected output: `Base WER: ~17% → Fine-tuned WER: ~14%` on the held-out set, with roughly **0.6%** of parameters trained. (The dataset, [ai4bharat/Svarah](https://huggingface.co/datasets/ai4bharat/Svarah), is gated — accept its terms and set `HF_TOKEN`.)
 
+### Using the fine-tuned model live
+
+Drop the trained adapter into `finetune/output/adapter/` and install the inference deps in your backend environment:
+
+```bash
+pip install torch transformers peft
+```
+
+With `ENABLE_FINETUNED_STT=true` (the default), the backend re-transcribes each answer with the fine-tuned Whisper and the UI shows that transcript beside Gemini's, tagged `QLoRA`. The first transcription downloads the base model and is slow on CPU; it's done off the event loop so the live conversation isn't blocked. If `torch` isn't installed the feature simply no-ops — the app still runs on Gemini's transcription. Check `GET /api/health` → `finetuned_stt` to see whether it's active.
+
 ## Project structure
 
 ```
@@ -162,9 +172,11 @@ voicelens/
 |---|---|---|---|
 | `GOOGLE_API_KEY` | — | Yes | Gemini API key from aistudio.google.com/apikey |
 | `GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live-preview` | No | Gemini Live model id, default in `backend/config.py` (stable alternative: `gemini-2.0-flash-live-001`) |
+| `GRADER_MODEL` | `gemini-3.5-flash` | No | Text model that scores answers via structured output |
 | `BACKEND_HOST` | `0.0.0.0` | No | Backend bind host |
 | `BACKEND_PORT` | `8000` | No | Backend port |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | No | Allowed CORS origin |
+| `ENABLE_FINETUNED_STT` | `true` | No | Re-transcribe answers with the fine-tuned Whisper (needs `torch`; no-ops otherwise) |
 | `HF_TOKEN` | — | Fine-tuning only | HuggingFace token for the gated Svarah dataset |
 
 ## Running tests

@@ -26,6 +26,20 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_ADAPTER = _PROJECT_ROOT / "finetune" / "output" / "adapter"
 
 
+def is_available() -> bool:
+    """True if the heavy ML deps are installed, so live transcription can run.
+
+    Checks for the packages WITHOUT importing them (no torch load cost), so the
+    backend can decide whether to offer B2 transcription and otherwise no-op.
+    """
+    import importlib.util
+
+    return all(
+        importlib.util.find_spec(mod) is not None
+        for mod in ("torch", "transformers")
+    )
+
+
 class WhisperTranscriber:
     """Lazily-loaded Whisper transcriber with optional fine-tuned adapter."""
 
@@ -47,8 +61,10 @@ class WhisperTranscriber:
             return self
 
         import torch
+        import transformers
         from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
+        transformers.logging.set_verbosity_error()  # quiet benign generation warnings
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
         dtype = torch.float16 if self._device == "cuda" else torch.float32
 
@@ -98,15 +114,17 @@ class WhisperTranscriber:
             audio, sampling_rate=sample_rate, return_tensors="pt"
         ).input_features.to(self._device, dtype=self._model.dtype)
 
-        forced = self._processor.get_decoder_prompt_ids(
-            language="en", task="transcribe"
-        )
+        # Use the language/task flags (the forced_decoder_ids path is deprecated
+        # in transformers 5.x). Works on 4.x and 5.x alike.
         with torch.no_grad():
             generated = self._model.generate(
-                input_features=features, forced_decoder_ids=forced, max_new_tokens=128
+                input_features=features,
+                language="en",
+                task="transcribe",
+                max_new_tokens=128,
             )
         return self._processor.tokenizer.batch_decode(
-            generated, skip_special_tokens=True
+            generated, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0].strip()
 
 
