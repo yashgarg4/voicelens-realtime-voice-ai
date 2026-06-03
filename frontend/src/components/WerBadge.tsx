@@ -1,6 +1,5 @@
 import type { WerResult } from "../types";
 
-// Small pill showing the Phase 3 base -> fine-tuned Whisper WER improvement.
 export function WerBadge({ wer }: { wer: WerResult | null }) {
   if (!wer || !wer.available) return null;
 
