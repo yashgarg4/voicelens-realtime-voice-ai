@@ -78,7 +78,7 @@ def resample_24k_to_48k(pcm_bytes: bytes) -> bytes:
     if len(pcm_bytes) == 0:
         return b""
     src = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32)
-    # Target index positions in source space: 0, 0.5, 1, 1.5, ...
+   
     src_idx = np.arange(src.size)
     dst_idx = np.arange(src.size * 2) / 2.0
     upsampled = np.interp(dst_idx, src_idx, src)
