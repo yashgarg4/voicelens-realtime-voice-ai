@@ -6,7 +6,7 @@ import type {
   ServerMessage,
 } from "../types";
 
-// --- Audio format constants (must match backend/config.py exactly) ---------
+// Audio format constants (must match backend/config.py exactly) 
 const SAMPLE_RATE_IN = 16_000; // mic -> Gemini
 const SAMPLE_RATE_OUT = 24_000; // Gemini -> speakers
 const CAPTURE_BUFFER_SIZE = 4096; // ScriptProcessor frame size (samples)
