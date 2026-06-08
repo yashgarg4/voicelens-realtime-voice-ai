@@ -1,7 +1,3 @@
-// Typed contract for messages the backend sends over /ws/session.
-// The browser only ever sends binary PCM frames (mic audio) plus optional
-// JSON control frames, so we only need to model the *incoming* direction here.
-
 export interface Question {
   id: number;
   category: string;
