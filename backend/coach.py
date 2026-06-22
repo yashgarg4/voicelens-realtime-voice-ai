@@ -334,8 +334,6 @@ async def generate_questions(
                 await asyncio.sleep(1.5)
     return []
 
-
-# Sent as the opening user turn to kick the interview off.
 START_INTERVIEW_TRIGGER = (
     "Let's begin the interview. Greet me briefly and ask me the question now."
 )
